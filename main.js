@@ -86,6 +86,26 @@ const wall2 = new THREE.Mesh(
 wall2.position.set(12, 10, 0)
 scene.add(wall2)
 
+// Text Sprite
+function createTextSprite(message) {
+    const canvas = document.createElement('canvas')
+    const ctx = canvas.getContext('2d')
+    canvas.width = 512
+    canvas.height = 256
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+    ctx.fillStyle = 'rgba(255, 255, 255, 1.0)'
+    ctx.font = '28px Arial'
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'top'
+    ctx.fillText(message, 10 , 10)
+    const texture = new THREE.CanvasTexture(canvas)
+    texture.needsUpdate = true
+    const spriteMaterial = new THREE.SpriteMaterial({ map: texture, transparent: true})
+    const sprite = new THREE.Sprite(spriteMaterial)
+    sprite.scale.set(25, 2.5, 1)
+    return sprite
+}
+
 let jogador 
 let mixer
 const clock = new THREE.Clock()
@@ -134,6 +154,86 @@ function fadetoAction(newAction, duration = 0.35) {
     }
     activeaction = nextaction
 } 
+//Stone
+//config stone
+const StoneGEO = new THREE.SphereGeometry(4, 80, 80)
+const StoneMAT = new THREE.MeshStandardMaterial({ color: 0x888888 })
+const stone = new THREE.Mesh(StoneGEO, StoneMAT)
+const startz = -20
+stone.position.set(0, 2, startz)
+stone.castShadow = true
+scene.add(stone)
+let stoneSpeed = 0.13
+let controlMoveStone = true
+let delayStone = 6500
+let IsReturningStone = false    
+//safezone
+const ZoneGEO = new THREE.BoxGeometry(20, 10, 10)
+const ZoneMAT = new THREE.MeshBasicMaterial({ color: 0x00ff00, transparent: true, opacity: 0.2 })
+const safezone = new THREE.Mesh(ZoneGEO, ZoneMAT)
+safezone.position.set(0, 2.5, 35)
+scene.add(safezone)
+
+// stone movement
+function moveStone(delta) {
+    if (! controlMoveStone) return
+    stone.position.z += stoneSpeed
+    stone.rotation.x += stoneSpeed * 0.2
+    const stoneBox = new THREE.Box3().setFromObject(stone)
+    const zoneBox = new THREE.Box3().setFromObject(safezone)
+    if (! IsReturningStone && stoneBox.intersectsBox(zoneBox)) {
+        IsReturningStone = true
+        stoneSpeed =- Math.abs(stoneSpeed)
+    }
+    if (IsReturningStone && stone.position.z < startz) {
+        stone.position.x = THREE.MathUtils.randFloatSpread(12)
+        stone.position.z = startz
+        stoneSpeed = Math.abs(stoneSpeed)
+        delayStone = 6500
+        IsReturningStone = false
+}}
+
+//colsion detection
+let PlayerBox = new THREE.Box3()
+let StoneBox = new THREE.Box3()
+let Touching = false
+let Lifes = false
+let LifesN = 5
+const lifesDisplay = createTextSprite('Lifes: 5')
+scene.add(lifesDisplay)
+lifesDisplay.position.set(0, 1.2, -2)
+const NameDisplay = createTextSprite('My name is Michael')
+scene.add(NameDisplay)
+lifesDisplay.position.set(20, 1.2, -2)
+function Colli() {
+    if (Touching || Lifes) return
+    Touching = true
+    Lifes = true
+    LifesN -= 1
+    setTimeout(() => {
+        Lifes = false
+    }, 2300)
+    if (LifesN <= 0) {
+        alert("Game Over! You lost all your lives.")
+        setTimeout(() => {
+            window.location.reload()
+        }, 100)
+    }
+    stoneSpeed = 0
+    const hitDirection = new THREE.Vector3(0, 0, 1)
+    hitDirection.applyQuaternion(jogador.quaternion)
+    hitDirection.normalize()
+    const Launch = hitDirection.multiplyScalar(1)
+    let DurationLanch = 0
+    const Interval = setInterval(() => {
+        DurationLanch += 0.023
+        jogador.position.add(Launch)
+        jogador.rotation.x += 0.1
+        if (DurationLanch >= 1) {
+            clearInterval(Interval)
+            Touching = false
+            stoneSpeed = 0.13
+        }}, 16)}
 
 const keys = {}
 window.addEventListener('keydown', (e) => {
@@ -188,6 +288,12 @@ function animate() {
         const Clookat = jogador.position.clone().add(new THREE.Vector3(0, 3, 0))
         camera.lookAt(Clookat)
     }
+    moveStone(delta)
+    if (jogador) {
+        PlayerBox.setFromObject(jogador)
+        StoneBox.setFromObject(stone)
+        if (PlayerBox.intersectsBox(StoneBox)) Colli()
+        }
     renderer.render(scene, camera)
 }
 animate()
