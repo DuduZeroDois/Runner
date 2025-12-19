@@ -69,7 +69,15 @@ const ground = new THREE.Mesh(
     new THREE.MeshStandardMaterial({ map: groundTexture }))
 ground.rotation.x = -Math.PI / 2
 scene.add(ground)
-
+const groundsegment = []
+const groundlenght = 200
+const groundcount = 4
+for (let i = 0; i < groundcount; i++) {
+    const segment = ground.clone()
+    segment.position.z = i * groundlenght
+    groundsegment.push(segment)
+    scene.add(segment)
+}
 // walls
 const wallLoader = new THREE.TextureLoader()
 const wallTexture = wallLoader.load('textures/LaFerrari.jpg')
@@ -85,7 +93,33 @@ const wall2 = new THREE.Mesh(
     new THREE.MeshStandardMaterial({ map: wallTexture }))
 wall2.position.set(12, 10, 0)
 scene.add(wall2)
-
+const wallsegment = []
+const walllenght = 100
+const wallcount = 4
+let pethcenterx = 0
+const curve = 1.4
+function CreateSW(z) {
+    const CL = wall1.clone()
+    const CR = wall2.clone()
+    CL.position.z = z
+    CR.position.z = z
+    pethcenterx += THREE.MathUtils.randFloat(-curve, curve)
+    pethcenterx = THREE.MathUtils.clamp(pethcenterx, -8, 8)
+    const offset = pethcenterx
+    CL.position.x = -10 + offset
+    CR.position.x = 10 + offset
+    scene.add(CL)
+    scene.add(CR)
+    wallsegment.push({
+        CL,CR,boxs: [
+            new THREE.Box3().setFromObject(CL),
+            new THREE.Box3().setFromObject(CR)
+        ]
+    })
+}
+for (let i = 0; i < groundcount; i++) {
+    CreateSW(i * walllenght)
+}
 // Text Sprite
 function createTextSprite(message) {
     const canvas = document.createElement('canvas')
@@ -146,7 +180,7 @@ fbxLoader.load('models/Idle.fbx', (fbx) => {
 function fadetoAction(newAction, duration = 0.35) {
     if (!mixer) return
     const nextaction = actions[newAction]
-    if (!newAction || nextaction === activeaction) return
+    if (!nextaction || nextaction === activeaction) return
     nextaction.reset()
     nextaction.play()
     if (activeaction) {
@@ -275,7 +309,25 @@ function animate() {
         if (keys['d']) direction.add(right)
         if (direction.length() > 0){
             direction.normalize()
-            jogador.position.addScaledVector(direction, movespeed)
+            wallsegment.forEach(segment =>{
+                if (jogador.position.z - segment.CL.position.z > walllenght){
+                    segment.CL.position.z += walllenght * wallsegment.length
+                    segment.CR.position.z += walllenght * wallsegment.length
+                    pethcenterx += THREE.MathUtils.randFloat(-curve, curve)
+                    pethcenterx = THREE.MathUtils.clamp(pethcenterx, -8, 8)
+                    const offset = pethcenterx
+                    segment.CL.position.x = -10 + offset
+                    segment.CR.position.x = 10 + offset
+                    segment.boxs[0].setFromObject(segment.CL)
+                    segment.boxs[1].setFromObject(segment.CR)
+                }
+            })
+            groundsegment.forEach(segment => {
+                if (jogador.position.z - segment.position.z > groundlenght){
+                    segment.position.z += groundlenght * groundsegment.length
+                }
+            })
+            //jogador.position.addScaledVector(direction, movespeed)
             const targetQuaternion = new THREE.Quaternion()
             // Corrigido: setFromUnitVectors (maiúsculo!)
             targetQuaternion.setFromUnitVectors(
@@ -303,3 +355,11 @@ window.addEventListener('resize', () => {
     camera.updateProjectionMatrix()
     renderer.setSize(window.innerWidth, window.innerHeight)
 })
+
+//vc ta conversando comigo?
+//voce e eu estamos conversando?
+//sim estamos conversando
+//entao me diga, qual a cor do ceu em um dia claro?
+//o ceu e azul em um dia claro
+//eai tudo bem?
+//tudo bem e com voce?
