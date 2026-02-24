@@ -229,8 +229,11 @@ function createOtherStone(zoffset) {
         speed: 0.13 + Math.random() * 0.05,
         delayStone: 6500,
         IsReturningStone: false
-        //paro
     })
+
+}
+for (let i = 0; i < 3; i++) {
+    createOtherStone(i * 20)
 }
 
 // stone movement
@@ -342,10 +345,17 @@ window.addEventListener('keyup', (e) => {
     if(e.key === "Shift") keys['shift'] = false
 })
 
-function animate() {
-    requestAnimationFrame(animate)
-    const delta = clock.getDelta()
-    if (mixer) mixer.update(delta)
+function FCUPDT() {
+    if (!jogador) return
+    const Cupdt = jogador.position.clone().add(cameraoffset.clone().applyAxisAngle(
+        new THREE.Vector3(0, 1, 0), controls.getAzimuthalAngle()))
+    camera.position.lerp(Cupdt, cameraSmoothness)
+    const Clookat = jogador.position.clone().add(new THREE.Vector3(0, 3, 0))
+    camera.lookAt(Clookat)
+}
+
+function JMUPDT() {
+    if (!jogador || currentState !== GameState.RUNNING) return
     const moving = keys['w'] || keys['a'] || keys['s'] || keys['d']
     runornot = !!keys['shift']
     if (moving) {
@@ -357,58 +367,69 @@ function animate() {
     } else {
         fadetoAction('idle')
     }
-    if (jogador) {
-        const movespeed = runornot ? velocityrun : velocitywalk
-        const direction = new THREE.Vector3()
-        const foward = new THREE.Vector3()
-        const right = new THREE.Vector3()
-        camera.getWorldDirection(foward)
-        foward.y = 0
-        foward.normalize()
-        right.copy(foward).cross(new THREE.Vector3(0, 1, 0)).normalize()
-        if (keys['w']) direction.add(foward)
-        if (keys['s']) direction.sub(foward)
-        if (keys['a']) direction.sub(right)
-        if (keys['d']) direction.add(right)
-        if (direction.length() > 0){
-            direction.normalize()
-            wallsegment.forEach(segment =>{
-                if (jogador.position.z - segment.CL.position.z > walllenght){
-                    segment.CL.position.z += walllenght * wallsegment.length
-                    segment.CR.position.z += walllenght * wallsegment.length
-                    pethcenterx += THREE.MathUtils.randFloat(-curve, curve)
-                    pethcenterx = THREE.MathUtils.clamp(pethcenterx, -8, 8)
-                    const offset = pethcenterx
-                    segment.CL.position.x = -10 + offset
-                    segment.CR.position.x = 10 + offset
-                    segment.boxs[0].setFromObject(segment.CL)
-                    segment.boxs[1].setFromObject(segment.CR)
-                }
-            })
-            groundsegment.forEach(segment => {
-                if (jogador.position.z - segment.position.z > groundlenght){
-                    segment.position.z += groundlenght * groundsegment.length
-                }
-            })
-            //jogador.position.addScaledVector(direction, movespeed)
-            const targetQuaternion = new THREE.Quaternion()
-            // Corrigido: setFromUnitVectors (maiúsculo!)
-            targetQuaternion.setFromUnitVectors(
-                new THREE.Vector3(0, 0, 1), direction.clone().normalize())
-            jogador.quaternion.slerp(targetQuaternion, 0.18)
-        }
-        const Cupdt = jogador.position.clone().add(cameraoffset.clone().applyAxisAngle(
-            new THREE.Vector3(0, 1, 0), controls.getAzimuthalAngle()))
-        camera.position.lerp(Cupdt, cameraSmoothness)
-        const Clookat = jogador.position.clone().add(new THREE.Vector3(0, 3, 0))
-        camera.lookAt(Clookat)
-    }
+    const movespeed = runornot ? velocityrun : velocitywalk
+    const direction = new THREE.Vector3()
+    const foward = new THREE.Vector3()
+    const right = new THREE.Vector3()
+    camera.getWorldDirection(foward)
+    foward.y = 0
+    foward.normalize()
+    right.copy(foward).cross(new THREE.Vector3(0, 1, 0)).normalize()
+    if (keys['w']) direction.add(foward)
+    if (keys['s']) direction.sub(foward)
+    if (keys['a']) direction.sub(right)
+    if (keys['d']) direction.add(right)
+    if (direction.length() === 0) return
+    direction.normalize()
+    const FKASNDA = jogador.position.clone()
+    jogador.position.addScaleVector(direction, movespeed)
+    PlayerBox.setFromObject(jogador)
+    for (const segment of wallsegment){
+            for (const box of segment.boxes){
+                if (PlayerBox.intersectsBox(box)) {
+                    jogador.position.copy(FKASNDA)
+    }}}
+    const targetQuaternion = new THREE.Quaternion()
+    targetQuaternion.setFromUnitVectors(
+    new THREE.Vector3(0, 0, 1), direction.clone().normalize())
+    jogador.quaternion.slerp(targetQuaternion, 0.18)            
+
+
+}
+
+function animate() {
+    requestAnimationFrame(animate)
+    const delta = clock.getDelta()
+    if (mixer) mixer.update(delta)
+
+    JMUPDT()
+
+    FCUPDT()
+
     moveStone(delta)
+
+    otherstones(delta)
+
     if (jogador) {
-        PlayerBox.setFromObject(jogador)
         StoneBox.setFromObject(stone)
         if (PlayerBox.intersectsBox(StoneBox)) Colli()
         }
+    wallsegment.forEach(segment =>{
+if (jogador.position.z - segment.CL.position.z > walllenght){
+    segment.CL.position.z += walllenght * wallsegment.length
+    segment.CR.position.z += walllenght * wallsegment.length
+    pethcenterx += THREE.MathUtils.randFloat(-curve, curve)
+    pethcenterx = THREE.MathUtils.clamp(pethcenterx, -8, 8)
+    const offset = pethcenterx
+    segment.CL.position.x = -10 + offset
+    segment.CR.position.x = 10 + offset
+    segment.boxs[0].setFromObject(segment.CL)
+    segment.boxs[1].setFromObject(segment.CR)
+}})
+groundsegment.forEach(segment => {
+    if (jogador.position.z - segment.position.z > groundlenght){
+        segment.position.z += groundlenght * groundsegment.length
+}})
     renderer.render(scene, camera)
 }
 animate()
