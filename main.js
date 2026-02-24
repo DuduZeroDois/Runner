@@ -140,7 +140,19 @@ function createTextSprite(message) {
     return sprite
 }
 
+const GameState = {
+    RUNNING: 'running',
+    GAMEOVER: 'gameover',
+    HIT: 'hit'
+}
+let currentState = GameState.RUNNING
+
 let jogador 
+let PlayerBox = new THREE.Box3()
+let StoneBox = new THREE.Box3()
+let Touching = false
+let Lifes = false
+let LifesN = 5
 let mixer
 const clock = new THREE.Clock()
 const fbxLoader = new FBXLoader()
@@ -207,9 +219,23 @@ const ZoneMAT = new THREE.MeshBasicMaterial({ color: 0x00ff00, transparent: true
 const safezone = new THREE.Mesh(ZoneGEO, ZoneMAT)
 safezone.position.set(0, 2.5, 35)
 scene.add(safezone)
+const stones = []
+function createOtherStone(zoffset) {
+    const pedra = stone.clone()
+    pedra.position.set(THREE.MathUtils.randFloatSpread(6), 2, startz -zoffset)
+    scene.add(pedra)
+    stones.push({
+        mesh: pedra,
+        speed: 0.13 + Math.random() * 0.05,
+        delayStone: 6500,
+        IsReturningStone: false
+        //paro
+    })
+}
 
 // stone movement
 function moveStone(delta) {
+    if (currentState !== GameState.RUNNING) return
     if (! controlMoveStone) return
     stone.position.z += stoneSpeed
     stone.rotation.x += stoneSpeed * 0.2
@@ -226,21 +252,53 @@ function moveStone(delta) {
         delayStone = 6500
         IsReturningStone = false
 }}
+function otherstones(delta) {
+    if (currentState !== GameState.RUNNING) return
+    stones.forEach(stoneData => {
+        const pedra = stoneData.mesh
+        if (stoneData.delayStone > 0) {
+            stoneData.delayStone -= delta * 1000
+            return
+        }
+        pedra.position.z += stoneData.speed
+        pedra.rotation.x += stoneData.speed * 0.25
+        const StoneBox2 = new THREE.Box3().setFromObject(pedra)
+        const zoneBox2 = new THREE.Box3().setFromObject(stoneData.safezone)
+        if (!stoneData.IsReturningStone && StoneBox2.intersectsBox(zoneBox2)) {
+            stoneData.IsReturningStone = true
+            stoneData.speed = -Math.abs(stoneData.speed)
+        }
+        if (stoneData.IsReturningStone && pedra.position.z < startz) {
+            pedra.position.x = THREE.MathUtils.randFloatSpread(12)
+            pedra.position.z = startz
+            stoneData.speed = Math.abs(stoneData.speed)
+            stoneData.delayStone = 6500
+            stoneData.IsReturningStone = false
+        }
+        if (jogador) {
+            PlayerBox.setFromObject(jogador)
+            if (PlayerBox.intersectsBox(StoneBox2)) {
+                Colli()
+            }
+        }
+})}
 
 //colsion detection
-let PlayerBox = new THREE.Box3()
-let StoneBox = new THREE.Box3()
-let Touching = false
-let Lifes = false
-let LifesN = 5
 const lifesDisplay = createTextSprite('Lifes: 5')
 scene.add(lifesDisplay)
 lifesDisplay.position.set(0, 1.2, -2)
 const NameDisplay = createTextSprite('My name is Michael')
 scene.add(NameDisplay)
 lifesDisplay.position.set(20, 1.2, -2)
+function colisaoparedes() {
+    const xmim = -4.3
+    const xmax = 4.3
+    jogador.position.x = THREE.MathUtils.clamp(jogador.position.x, xmim, xmax)
+}
 function Colli() {
-    if (Touching || Lifes) return
+    // if (Touching || Lifes) return
+    if (currentState === GameState.HIT || currentState === GameState.GAMEOVER) return
+    currentState = GameState.HIT
     Touching = true
     Lifes = true
     LifesN -= 1
@@ -249,9 +307,10 @@ function Colli() {
     }, 2300)
     if (LifesN <= 0) {
         alert("Game Over! You lost all your lives.")
+        currentState = GameState.GAMEOVER
         setTimeout(() => {
             window.location.reload()
-        }, 100)
+        }, 2555)
     }
     stoneSpeed = 0
     const hitDirection = new THREE.Vector3(0, 0, 1)
@@ -262,11 +321,15 @@ function Colli() {
     const Interval = setInterval(() => {
         DurationLanch += 0.023
         jogador.position.add(Launch)
+        colisaoparedes()
         jogador.rotation.x += 0.1
+        jogador.rotation.x = THREE.MathUtils.clamp(jogador.rotation.x, -1.2, 1.2)
         if (DurationLanch >= 1) {
             clearInterval(Interval)
             Touching = false
             stoneSpeed = 0.13
+            jogador.rotation.set(0, jogador.rotation.y, 0)
+            if (currentState !== GameState.GAMEOVER) currentState = GameState.RUNNING
         }}, 16)}
 
 const keys = {}
@@ -355,11 +418,3 @@ window.addEventListener('resize', () => {
     camera.updateProjectionMatrix()
     renderer.setSize(window.innerWidth, window.innerHeight)
 })
-
-//vc ta conversando comigo?
-//voce e eu estamos conversando?
-//sim estamos conversando
-//entao me diga, qual a cor do ceu em um dia claro?
-//o ceu e azul em um dia claro
-//eai tudo bem?
-//tudo bem e com voce?
