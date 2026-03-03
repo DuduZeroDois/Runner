@@ -95,19 +95,19 @@ wall2.position.set(12, 10, 0)
 scene.add(wall2)
 const wallsegment = []
 const walllenght = 100
-const wallcount = 4
+//const wallcount = 4 // não usou kkkk
 let pethcenterx = 0
 const curve = 1.4
-function CreateSW(z) {
+function CreateSW(zoffset) {
     const CL = wall1.clone()
     const CR = wall2.clone()
-    CL.position.z = z
-    CR.position.z = z
+    CL.position.z = zoffset
+    CR.position.z = zoffset
     pethcenterx += THREE.MathUtils.randFloat(-curve, curve)
     pethcenterx = THREE.MathUtils.clamp(pethcenterx, -8, 8)
     const offset = pethcenterx
-    CL.position.x = -10 + offset
-    CR.position.x = 10 + offset
+    CL.position.x = -20 + offset // para aumentar = alterar aqui
+    CR.position.x = 20 + offset
     scene.add(CL)
     scene.add(CR)
     wallsegment.push({
@@ -237,7 +237,7 @@ for (let i = 0; i < 3; i++) {
 }
 
 // stone movement
-function moveStone(delta) {
+function MVSTOUPDT(delta) {
     if (currentState !== GameState.RUNNING) return
     if (! controlMoveStone) return
     stone.position.z += stoneSpeed
@@ -255,7 +255,7 @@ function moveStone(delta) {
         delayStone = 6500
         IsReturningStone = false
 }}
-function otherstones(delta) {
+function OTHSTOUPDT(delta) {
     if (currentState !== GameState.RUNNING) return
     stones.forEach(stoneData => {
         const pedra = stoneData.mesh
@@ -293,9 +293,10 @@ lifesDisplay.position.set(0, 1.2, -2)
 const NameDisplay = createTextSprite('My name is Michael')
 scene.add(NameDisplay)
 lifesDisplay.position.set(20, 1.2, -2)
+
 function colisaoparedes() {
-    const xmim = -4.3
-    const xmax = 4.3
+    const xmim = -8.3
+    const xmax = 8.3
     jogador.position.x = THREE.MathUtils.clamp(jogador.position.x, xmim, xmax)
 }
 function Colli() {
@@ -397,6 +398,26 @@ function JMUPDT() {
 
 }
 
+function WUPDT() {
+    if (!jogador) return
+    wallsegment.forEach(segment =>{
+        if (jogador.position.z - segment.CL.position.z > walllenght){
+            segment.CL.position.z += walllenght * wallsegment.length
+            segment.CR.position.z += walllenght * wallsegment.length
+            pethcenterx += THREE.MathUtils.randFloat(-curve, curve)
+            pethcenterx = THREE.MathUtils.clamp(pethcenterx, -8, 8)
+            const offset = pethcenterx
+            segment.CL.position.x = -10 + offset
+            segment.CR.position.x = 10 + offset
+            segment.boxs[0].setFromObject(segment.CL)
+            segment.boxs[1].setFromObject(segment.CR)
+    }})
+    groundsegment.forEach(segment => {
+        if (jogador.position.z - segment.position.z > groundlenght){
+            segment.position.z += groundlenght * groundsegment.length
+    }})
+}
+
 function animate() {
     requestAnimationFrame(animate)
     const delta = clock.getDelta()
@@ -406,30 +427,17 @@ function animate() {
 
     FCUPDT()
 
-    moveStone(delta)
+    MVSTOUPDT(delta)
 
-    otherstones(delta)
+    OTHSTOUPDT(delta)
+
+    WUPDT()
 
     if (jogador) {
+        PlayerBox.setFromObject(jogador)
         StoneBox.setFromObject(stone)
         if (PlayerBox.intersectsBox(StoneBox)) Colli()
-        }
-    wallsegment.forEach(segment =>{
-if (jogador.position.z - segment.CL.position.z > walllenght){
-    segment.CL.position.z += walllenght * wallsegment.length
-    segment.CR.position.z += walllenght * wallsegment.length
-    pethcenterx += THREE.MathUtils.randFloat(-curve, curve)
-    pethcenterx = THREE.MathUtils.clamp(pethcenterx, -8, 8)
-    const offset = pethcenterx
-    segment.CL.position.x = -10 + offset
-    segment.CR.position.x = 10 + offset
-    segment.boxs[0].setFromObject(segment.CL)
-    segment.boxs[1].setFromObject(segment.CR)
-}})
-groundsegment.forEach(segment => {
-    if (jogador.position.z - segment.position.z > groundlenght){
-        segment.position.z += groundlenght * groundsegment.length
-}})
+    }
     renderer.render(scene, camera)
 }
 animate()
