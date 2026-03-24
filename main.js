@@ -39,9 +39,9 @@ scene.background = new THREE.Color(0x00F8FF)
 scene.fog = new THREE.Fog(0x00F8FF, 10, 50)
 
 // camera
-const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.1, 100)
+const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.1, 1000)
 camera.position.set(0, 7, -16)
-scene.add(camera)
+//scene.add(camera)
 
 // renderer
 const renderer = new THREE.WebGLRenderer({ antialias: true })
@@ -54,6 +54,7 @@ const controls = new FollowControls(camera, renderer.domElement)
 // lights
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.6)
 scene.add(ambientLight)
+
 const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8)
 directionalLight.position.set(10, 20, 10)
 directionalLight.castShadow = true
@@ -64,11 +65,14 @@ const groundLoader = new THREE.TextureLoader()
 const groundTexture = groundLoader.load('textures/chato.jpg')
 groundTexture.wrapS = groundTexture.wrapT = THREE.RepeatWrapping
 groundTexture.repeat.set(10, 10)
+
 const ground = new THREE.Mesh(
     new THREE.PlaneGeometry(100, 200),
-    new THREE.MeshStandardMaterial({ map: groundTexture }))
+    new THREE.MeshStandardMaterial({ map: groundTexture })
+)
 ground.rotation.x = -Math.PI / 2
 scene.add(ground)
+
 const groundsegment = []
 const groundlenght = 200
 const groundcount = 4
@@ -87,17 +91,15 @@ const wall1 = new THREE.Mesh(
     new THREE.BoxGeometry(1, 20, 100),
     new THREE.MeshStandardMaterial({ map: wallTexture }))
 wall1.position.set(-12, 10, 0)
-scene.add(wall1)
-const wall2 = new THREE.Mesh(
-    new THREE.BoxGeometry(1, 20, 100),
-    new THREE.MeshStandardMaterial({ map: wallTexture }))
-wall2.position.set(12, 10, 0)
-scene.add(wall2)
+const wall2 = wall1.clone()
+wall2.position.x = 12
+scene.add(wall1, wall2)
+
 const wallsegment = []
 const walllenght = 100
-//const wallcount = 4 // não usou kkkk
 let pethcenterx = 0
 const curve = 1.4
+
 function CreateSW(zoffset) {
     const CL = wall1.clone()
     const CR = wall2.clone()
@@ -120,6 +122,67 @@ function CreateSW(zoffset) {
 for (let i = 0; i < groundcount; i++) {
     CreateSW(i * walllenght)
 }
+
+function WUPDT() {
+  if (!jogador) return;
+
+  wallsegment.forEach(segment => {
+
+    if (jogador.position.z - segment.CL.position.z > walllenght) {
+
+      const newZ = segment.CL.position.z + walllenght * wallsegment.length;
+
+      // curva procedural igual à criação inicial
+      pethcenterx += THREE.MathUtils.randFloat(-curve, curve);
+      pethcenterx = THREE.MathUtils.clamp(pethcenterx, -8, 8);
+
+      const offset = pethcenterx;
+
+      segment.CL.position.set(-5 + offset, 2.5, newZ);
+      segment.CR.position.set(5 + offset, 2.5, newZ);
+
+      // atualiza colisores
+      segment.boxs[0].setFromObject(segment.CL);
+      segment.boxs[1].setFromObject(segment.CR);
+    }
+
+  });
+}
+
+// OBSTÁCULOS PROCEDURAIS ( Clindro )
+const textureLoader = new THREE.TextureLoader()
+const obstacleTexture = textureLoader.load('textures/obstacle.jpg');
+const obstacleMaterial = new THREE.MeshStandardMaterial({
+  map: obstacleTexture
+});
+const obstacleGeometry = new THREE.CylinderGeometry(1.5, 1.5, 2, 16);
+
+const obstacles = [];
+const obstacleCount = 10;
+const obstacleSpacing = 20;
+
+function createObstacle(zPos) {
+  const obstacle = new THREE.Mesh(obstacleGeometry, obstacleMaterial);
+  obstacle.castShadow = true;
+
+  // posição procedural controlada
+  obstacle.position.set(
+    THREE.MathUtils.randFloat(-3, 3), // respeita as paredes
+    1,
+    zPos
+  );
+
+  scene.add(obstacle);
+
+  obstacles.push({
+    mesh: obstacle,
+    box: new THREE.Box3().setFromObject(obstacle)
+  });
+}
+for (let i = 1; i <= obstacleCount; i++) {
+  createObstacle(i * obstacleSpacing + 10);
+}
+
 // Text Sprite
 function createTextSprite(message) {
     const canvas = document.createElement('canvas')
@@ -137,8 +200,37 @@ function createTextSprite(message) {
     const spriteMaterial = new THREE.SpriteMaterial({ map: texture, transparent: true})
     const sprite = new THREE.Sprite(spriteMaterial)
     sprite.scale.set(25, 2.5, 1)
+    // Text update
+    sprite.updateText = function(newMessage) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height)
+        ctx.fillStyle = 'rgba(255, 255, 255, 1.0)'
+        ctx.font = '28px Arial'
+        ctx.textAlign = 'left'
+        ctx.textBaseline = 'top'
+        ctx.fillText(newMessage, 10 , 10)
+        texture.needsUpdate = true
+    }
     return sprite
 }
+
+// Criação de HUD 
+let LifesN = 5
+const lifesDisplay = createTextSprite('Lifes: 5')
+scene.add(lifesDisplay)
+lifesDisplay.position.set(0, 1.2, -2)
+const NameDisplay = createTextSprite('My name is Michael')
+scene.add(NameDisplay)
+NameDisplay.position.set(20, 1.2, -2)
+
+// -- ADD -- SCORE SYSTEM
+let Score = 0
+let Multi = 1
+let FarScore = 5
+
+const ScoreDisplay = createTextSprite('Score: 0')
+scene.add(ScoreDisplay)
+const MultiDisplay = createTextSprite('Multiplier: x1')
+scene.add(MultiDisplay)
 
 const GameState = {
     RUNNING: 'running',
@@ -148,13 +240,9 @@ const GameState = {
 let currentState = GameState.RUNNING
 
 let jogador 
-let PlayerBox = new THREE.Box3()
-let StoneBox = new THREE.Box3()
-let Touching = false
-let Lifes = false
-let LifesN = 5
 let mixer
 const clock = new THREE.Clock()
+
 const fbxLoader = new FBXLoader()
 const actions = {
     idle: null,
@@ -174,7 +262,7 @@ fbxLoader.load('models/Idle.fbx', (fbx) => {
     scene.add(jogador)
 
     mixer = new THREE.AnimationMixer(jogador)
-    if (fbx.animations && fbx.animations.length > 0) {
+    if (fbx.animations.length > 0) {
         actions.idle = mixer.clipAction(fbx.animations[0])
         actions.idle.play()
         activeaction = actions.idle
@@ -187,7 +275,8 @@ fbxLoader.load('models/Idle.fbx', (fbx) => {
         if (fbx.animations && fbx.animations.length > 0) {
             actions.run = mixer.clipAction(fbx.animations[0])
         }})
-}, console.error)
+}, undefined, (error) => { console.error(error) })
+
 
 function fadetoAction(newAction, duration = 0.35) {
     if (!mixer) return
@@ -200,105 +289,78 @@ function fadetoAction(newAction, duration = 0.35) {
     }
     activeaction = nextaction
 } 
-//Stone
-//config stone
+
 const StoneGEO = new THREE.SphereGeometry(4, 80, 80)
 const StoneMAT = new THREE.MeshStandardMaterial({ color: 0x888888 })
 const stone = new THREE.Mesh(StoneGEO, StoneMAT)
-const startz = -20
+const startz = -100
 stone.position.set(0, 2, startz)
 stone.castShadow = true
 scene.add(stone)
+
 let stoneSpeed = 0.13
 let controlMoveStone = true
-let delayStone = 6500
+let stoneDelay = 6500
 let IsReturningStone = false    
+
 //safezone
 const ZoneGEO = new THREE.BoxGeometry(20, 10, 10)
 const ZoneMAT = new THREE.MeshBasicMaterial({ color: 0x00ff00, transparent: true, opacity: 0.2 })
-const safezone = new THREE.Mesh(ZoneGEO, ZoneMAT)
-safezone.position.set(0, 2.5, 35)
-scene.add(safezone)
 const stones = []
+
 function createOtherStone(zoffset) {
     const pedra = stone.clone()
     pedra.position.set(THREE.MathUtils.randFloatSpread(6), 2, startz -zoffset)
     scene.add(pedra)
+
+    const zone = new THREE.Mesh(ZoneGEO, ZoneMAT)
+    zone.position.set(0, 2.5, 150 - zoffset) 
+    scene.add(zone)
+
     stones.push({
         mesh: pedra,
-        speed: 0.13 + Math.random() * 0.05,
-        delayStone: 6500,
+        safezone: zone,
+        speed: stoneSpeed,
+        delayStone: stoneDelay,
         IsReturningStone: false
-    })
-
-}
+    })}
 for (let i = 0; i < 3; i++) {
     createOtherStone(i * 20)
 }
 
-// stone movement
-function MVSTOUPDT(delta) {
+// ADD DIFFICULTY CONTROLLER
+let time = 0
+let DificultyMultiplier = 1
+function updateDifficulty(delta) {
     if (currentState !== GameState.RUNNING) return
-    if (! controlMoveStone) return
-    stone.position.z += stoneSpeed
-    stone.rotation.x += stoneSpeed * 0.2
-    const stoneBox = new THREE.Box3().setFromObject(stone)
-    const zoneBox = new THREE.Box3().setFromObject(safezone)
-    if (! IsReturningStone && stoneBox.intersectsBox(zoneBox)) {
-        IsReturningStone = true
-        stoneSpeed =- Math.abs(stoneSpeed)
-    }
-    if (IsReturningStone && stone.position.z < startz) {
-        stone.position.x = THREE.MathUtils.randFloatSpread(12)
-        stone.position.z = startz
-        stoneSpeed = Math.abs(stoneSpeed)
-        delayStone = 6500
-        IsReturningStone = false
-}}
-function OTHSTOUPDT(delta) {
-    if (currentState !== GameState.RUNNING) return
+    time += delta
+    DificultyMultiplier = 1 + time * 0.06 // aumenta a dificuldade ao longo do tempo
     stones.forEach(stoneData => {
-        const pedra = stoneData.mesh
-        if (stoneData.delayStone > 0) {
-            stoneData.delayStone -= delta * 1000
-            return
-        }
-        pedra.position.z += stoneData.speed
-        pedra.rotation.x += stoneData.speed * 0.25
-        const StoneBox2 = new THREE.Box3().setFromObject(pedra)
-        const zoneBox2 = new THREE.Box3().setFromObject(stoneData.safezone)
-        if (!stoneData.IsReturningStone && StoneBox2.intersectsBox(zoneBox2)) {
-            stoneData.IsReturningStone = true
-            stoneData.speed = -Math.abs(stoneData.speed)
-        }
-        if (stoneData.IsReturningStone && pedra.position.z < startz) {
-            pedra.position.x = THREE.MathUtils.randFloatSpread(12)
-            pedra.position.z = startz
-            stoneData.speed = Math.abs(stoneData.speed)
-            stoneData.delayStone = 6500
-            stoneData.IsReturningStone = false
-        }
-        if (jogador) {
-            PlayerBox.setFromObject(jogador)
-            if (PlayerBox.intersectsBox(StoneBox2)) {
-                Colli()
-            }
-        }
-})}
+        stoneData.speed = Math.sign(stoneData.speed) * stoneSpeed * DificultyMultiplier
+    })
+}
 
-//colsion detection
-const lifesDisplay = createTextSprite('Lifes: 5')
-scene.add(lifesDisplay)
-lifesDisplay.position.set(0, 1.2, -2)
-const NameDisplay = createTextSprite('My name is Michael')
-scene.add(NameDisplay)
-lifesDisplay.position.set(20, 1.2, -2)
+const safezone = new THREE.Mesh(ZoneGEO, ZoneMAT)
+safezone.position.set(0, 2.5, 150)
+scene.add(safezone)
+
+// Colisão
+let PlayerBox = new THREE.Box3()
+let StoneBox = new THREE.Box3()
+let Touching = false
+let Lifes = false
+
+const wallboxs = [
+    new THREE.Box3().setFromObject(wall1),
+    new THREE.Box3().setFromObject(wall2)
+]
 
 function colisaoparedes() {
     const xmim = -8.3
     const xmax = 8.3
     jogador.position.x = THREE.MathUtils.clamp(jogador.position.x, xmim, xmax)
 }
+
 function Colli() {
     // if (Touching || Lifes) return
     if (currentState === GameState.HIT || currentState === GameState.GAMEOVER) return
@@ -306,6 +368,7 @@ function Colli() {
     Touching = true
     Lifes = true
     LifesN -= 1
+    // atualizar texto na tela
     setTimeout(() => {
         Lifes = false
     }, 2300)
@@ -317,6 +380,7 @@ function Colli() {
         }, 2555)
     }
     stoneSpeed = 0
+    
     const hitDirection = new THREE.Vector3(0, 0, 1)
     hitDirection.applyQuaternion(jogador.quaternion)
     hitDirection.normalize()
@@ -346,6 +410,75 @@ window.addEventListener('keyup', (e) => {
     if(e.key === "Shift") keys['shift'] = false
 })
 
+// stone movement
+function MVSTOUPDT(delta) {
+    if (currentState !== GameState.RUNNING) return
+    if (!controlMoveStone) return
+    stone.position.z += stoneSpeed
+    stone.rotation.x += stoneSpeed * 0.2
+    const stoneBox = new THREE.Box3().setFromObject(stone)
+    const zoneBox = new THREE.Box3().setFromObject(safezone)
+    if (!IsReturningStone && stoneBox.intersectsBox(zoneBox)) {
+        IsReturningStone = true
+        stoneSpeed = -Math.abs(stoneSpeed)
+    }
+    if (IsReturningStone && stone.position.z <= startz) {
+        stone.position.x = THREE.MathUtils.randFloatSpread(12)
+        stone.position.z = startz
+        stoneSpeed = Math.abs(stoneSpeed)
+        IsReturningStone = false
+        stoneDelay = 6500
+}}
+
+function OTHSTOUPDT(delta) {
+    if (currentState !== GameState.RUNNING) return
+    stones.forEach(stoneData => {
+        const pedra = stoneData.mesh
+        if (stoneData.delayStone > 0) {
+            stoneData.delayStone -= delta * 1000
+            return
+        }
+        pedra.position.z += stoneData.speed
+        pedra.rotation.x += stoneData.speed * 0.25
+        const StoneBox2 = new THREE.Box3().setFromObject(pedra)
+        const zoneBox2 = new THREE.Box3().setFromObject(stoneData.safezone) // tirei stonedata porque o safezone é global e não precisa de delay para cada pedra, só para a primeira pedra
+        if (!stoneData.IsReturningStone && StoneBox2.intersectsBox(zoneBox2)) {
+            stoneData.IsReturningStone = true
+            stoneData.speed = -Math.abs(stoneData.speed)
+        }
+        if (stoneData.IsReturningStone && pedra.position.z <= startz) {
+            pedra.position.x = THREE.MathUtils.randFloatSpread(12)
+            pedra.position.z = startz
+            stoneData.speed = Math.abs(stoneData.speed)
+            stoneData.delayStone = 6500
+            stoneData.IsReturningStone = false
+        }
+        if (jogador) {
+            PlayerBox.setFromObject(jogador)
+            if (PlayerBox.intersectsBox(StoneBox2)) {
+                Colli()
+            }
+        }
+})}
+
+// --- ADD HUD UPDATE FUNCTION --- //
+lifesDisplay.updateText("Lifes: " + LifesN)
+ScoreDisplay.updateText("Score: " + Math.floor(Score))
+MultiDisplay.updateText("Multiplier: x" + Multi.toFixed(1))
+
+const GhostCamera = camera.position.clone()
+const GhostLookAt = new THREE.Vector3()
+camera.getWorldDirection(GhostLookAt)
+lifesDisplay.position.copy(GhostCamera.clone().add(GhostLookAt.clone().multiplyScalar(2)))
+lifesDisplay.position.y += 0.2
+lifesDisplay.quaternion.copy(camera.quaternion)
+ScoreDisplay.position.copy(GhostCamera.clone().add(GhostLookAt.clone().multiplyScalar(2)))
+ScoreDisplay.position.y += 0.2
+ScoreDisplay.quaternion.copy(camera.quaternion)
+MultiDisplay.position.copy(GhostCamera.clone().add(GhostLookAt.clone().multiplyScalar(2)))
+MultiDisplay.position.y += 0.2
+MultiDisplay.quaternion.copy(camera.quaternion)
+
 function FCUPDT() {
     if (!jogador) return
     const Cupdt = jogador.position.clone().add(cameraoffset.clone().applyAxisAngle(
@@ -354,6 +487,29 @@ function FCUPDT() {
     const Clookat = jogador.position.clone().add(new THREE.Vector3(0, 3, 0))
     camera.lookAt(Clookat)
 }
+
+function GUPDT() {
+    if (!jogador) return
+    groundsegment.forEach(segment => {
+        if (jogador.position.z - segment.position.z > groundlenght){
+            segment.position.z += groundlenght * groundsegment.length
+    }})
+}
+
+// --- ADD Obstacles UPDATE FUNCTION --- //
+function OBSTUPDT() {
+    if (!jogador) return
+    PlayerBox.setFromObject(jogador)
+    obstacles.forEach(obstacleData => {
+        if (jogador.position.z - obstacleData.mesh.position.z > 9) {
+            obstacleData.mesh.position.z += obstacleSpacing * obstacles.length
+            obstacleData.mesh.position.x = THREE.MathUtils.randFloat(-3, 3)
+        }
+        obstacleData.box.setFromObject(obstacleData.mesh)
+        if (PlayerBox.intersectsBox(obstacleData.box)) {
+            Colli()
+        }
+})}
 
 function JMUPDT() {
     if (!jogador || currentState !== GameState.RUNNING) return
@@ -369,24 +525,30 @@ function JMUPDT() {
         fadetoAction('idle')
     }
     const movespeed = runornot ? velocityrun : velocitywalk
+
     const direction = new THREE.Vector3()
     const foward = new THREE.Vector3()
     const right = new THREE.Vector3()
+
     camera.getWorldDirection(foward)
     foward.y = 0
     foward.normalize()
+
     right.copy(foward).cross(new THREE.Vector3(0, 1, 0)).normalize()
+
     if (keys['w']) direction.add(foward)
     if (keys['s']) direction.sub(foward)
     if (keys['a']) direction.sub(right)
     if (keys['d']) direction.add(right)
     if (direction.length() === 0) return
     direction.normalize()
+
     const FKASNDA = jogador.position.clone()
-    jogador.position.addScaleVector(direction, movespeed)
+    jogador.position.addScaledVector(direction, movespeed) // arrumar aqui adicionar a letra d no scale
     PlayerBox.setFromObject(jogador)
+
     for (const segment of wallsegment){
-            for (const box of segment.boxes){
+            for (const box of segment.boxs){ // alterei para boxs igual a linha 114
                 if (PlayerBox.intersectsBox(box)) {
                     jogador.position.copy(FKASNDA)
     }}}
@@ -394,44 +556,34 @@ function JMUPDT() {
     targetQuaternion.setFromUnitVectors(
     new THREE.Vector3(0, 0, 1), direction.clone().normalize())
     jogador.quaternion.slerp(targetQuaternion, 0.18)            
-
-
 }
 
-function WUPDT() {
-    if (!jogador) return
-    wallsegment.forEach(segment =>{
-        if (jogador.position.z - segment.CL.position.z > walllenght){
-            segment.CL.position.z += walllenght * wallsegment.length
-            segment.CR.position.z += walllenght * wallsegment.length
-            pethcenterx += THREE.MathUtils.randFloat(-curve, curve)
-            pethcenterx = THREE.MathUtils.clamp(pethcenterx, -8, 8)
-            const offset = pethcenterx
-            segment.CL.position.x = -10 + offset
-            segment.CR.position.x = 10 + offset
-            segment.boxs[0].setFromObject(segment.CL)
-            segment.boxs[1].setFromObject(segment.CR)
-    }})
-    groundsegment.forEach(segment => {
-        if (jogador.position.z - segment.position.z > groundlenght){
-            segment.position.z += groundlenght * groundsegment.length
-    }})
-}
+// --- ADD Score Update Function --- //
 
 function animate() {
     requestAnimationFrame(animate)
     const delta = clock.getDelta()
     if (mixer) mixer.update(delta)
 
-    JMUPDT()
+    // HUD update
 
-    FCUPDT()
+    JMUPDT() // player movement update
 
-    MVSTOUPDT(delta)
+    FCUPDT() //camera follow player update
 
-    OTHSTOUPDT(delta)
+    GUPDT() // ground update
 
-    WUPDT()
+    WUPDT() // walls update
+
+    // Obstacles update
+
+    MVSTOUPDT(delta) // stone movement update
+
+    OTHSTOUPDT(delta) // other stones movement update
+
+    // Difficulty update
+
+    // Score update
 
     if (jogador) {
         PlayerBox.setFromObject(jogador)
@@ -440,6 +592,7 @@ function animate() {
     }
     renderer.render(scene, camera)
 }
+
 animate()
 
 window.addEventListener('resize', () => {
