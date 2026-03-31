@@ -82,6 +82,21 @@ for (let i = 0; i < groundcount; i++) {
     groundsegment.push(segment)
     scene.add(segment)
 }
+
+// Lava
+const lavaTexture = new THREE.TextureLoader().load('textures/lava.jpg')
+lavaTexture.wrapS = lavaTexture.wrapT = THREE.RepeatWrapping
+lavaTexture.repeat.set(1, 1)
+const lava = new THREE.Mesh(
+    new THREE.PlaneGeometry(100, 200),
+    new THREE.MeshStandardMaterial({ map: lavaTexture })
+)
+lava.rotation.x = -Math.PI / 2
+lava.position.set (0, 0.05, -150)
+scene.add(lava)
+let lavaBox = new THREE.Box3().setFromObject(lava)
+let SpeedL = 0.05
+
 // walls
 const wallLoader = new THREE.TextureLoader()
 const wallTexture = wallLoader.load('textures/LaFerrari.jpg')
@@ -138,8 +153,8 @@ function WUPDT() {
 
       const offset = pethcenterx;
 
-      segment.CL.position.set(-5 + offset, 2.5, newZ);
-      segment.CR.position.set(5 + offset, 2.5, newZ);
+      segment.CL.position.set(-20 + offset, 2.5, newZ);
+      segment.CR.position.set(20 + offset, 2.5, newZ);
 
       // atualiza colisores
       segment.boxs[0].setFromObject(segment.CL);
@@ -183,54 +198,22 @@ for (let i = 1; i <= obstacleCount; i++) {
   createObstacle(i * obstacleSpacing + 10);
 }
 
-// Text Sprite
-function createTextSprite(message) {
-    const canvas = document.createElement('canvas')
-    const ctx = canvas.getContext('2d')
-    canvas.width = 512
-    canvas.height = 256
-    ctx.clearRect(0, 0, canvas.width, canvas.height)
-    ctx.fillStyle = 'rgba(255, 255, 255, 1.0)'
-    ctx.font = '28px Arial'
-    ctx.textAlign = 'left'
-    ctx.textBaseline = 'top'
-    ctx.fillText(message, 10 , 10)
-    const texture = new THREE.CanvasTexture(canvas)
-    texture.needsUpdate = true
-    const spriteMaterial = new THREE.SpriteMaterial({ map: texture, transparent: true})
-    const sprite = new THREE.Sprite(spriteMaterial)
-    sprite.scale.set(25, 2.5, 1)
-    // Text update
-    sprite.updateText = function(newMessage) {
-        ctx.clearRect(0, 0, canvas.width, canvas.height)
-        ctx.fillStyle = 'rgba(255, 255, 255, 1.0)'
-        ctx.font = '28px Arial'
-        ctx.textAlign = 'left'
-        ctx.textBaseline = 'top'
-        ctx.fillText(newMessage, 10 , 10)
-        texture.needsUpdate = true
-    }
-    return sprite
-}
-
 // Criação de HUD 
 let LifesN = 5
-const lifesDisplay = createTextSprite('Lifes: 5')
-scene.add(lifesDisplay)
-lifesDisplay.position.set(0, 1.2, -2)
-const NameDisplay = createTextSprite('My name is Michael')
-scene.add(NameDisplay)
-NameDisplay.position.set(20, 1.2, -2)
+const HUD = document.createElement('div')
+HUD.style.position = 'fixed'
+HUD.style.top = '20px'
+HUD.style.left = '20px'
+HUD.style.color = 'white'
+HUD.style.fontSize = '24px'
+HUD.style.fontFamily = 'Arial, sans-serif'
+HUD.style.zIndex = '1000'
+document.body.appendChild(HUD)
 
 // -- ADD -- SCORE SYSTEM
 let Score = 0
 let Multi = 1
 let FarScore = 5
-
-const ScoreDisplay = createTextSprite('Score: 0')
-scene.add(ScoreDisplay)
-const MultiDisplay = createTextSprite('Multiplier: x1')
-scene.add(MultiDisplay)
 
 const GameState = {
     RUNNING: 'running',
@@ -350,14 +333,9 @@ let StoneBox = new THREE.Box3()
 let Touching = false
 let Lifes = false
 
-const wallboxs = [
-    new THREE.Box3().setFromObject(wall1),
-    new THREE.Box3().setFromObject(wall2)
-]
-
 function colisaoparedes() {
-    const xmim = -8.3
-    const xmax = 8.3
+    const xmim = -20 + pethcenterx + 1
+    const xmax = 20 + pethcenterx - 1
     jogador.position.x = THREE.MathUtils.clamp(jogador.position.x, xmim, xmax)
 }
 
@@ -461,24 +439,50 @@ function OTHSTOUPDT(delta) {
         }
 })}
 
+// --- Itens Count/Total --- //
+const Colectables = []
+const TotalItens = 67
+
+function  CIC(z) {
+    const itemGEO = new THREE.TorusGeometry(1, 0.4, 16, 32)
+    const ItemMesh = new THREE.MeshStandardMaterial({ color: 0xf2ff00, emissive: 0xffaa00, emissiveIntensity: 1 })
+    const item = new THREE.Mesh(itemGEO, ItemMesh)
+    item.position.set(THREE.MathUtils.randFloat(-5, 5), 2, z)
+    scene.add(item)
+    Colectables.push({
+        mesh: item,
+        box: new THREE.Box3().setFromObject(item),
+        collected: false
+    })
+}
+for (let i = 1; i < TotalItens; i++) {
+    CIC(i * 30)
+}
+let ItensCount = 0
+
 // --- ADD HUD UPDATE FUNCTION --- //
-lifesDisplay.updateText("Lifes: " + LifesN)
-ScoreDisplay.updateText("Score: " + Math.floor(Score))
-MultiDisplay.updateText("Multiplier: x" + Multi.toFixed(1))
-
-const GhostCamera = camera.position.clone()
-const GhostLookAt = new THREE.Vector3()
-camera.getWorldDirection(GhostLookAt)
-lifesDisplay.position.copy(GhostCamera.clone().add(GhostLookAt.clone().multiplyScalar(2)))
-lifesDisplay.position.y += 0.2
-lifesDisplay.quaternion.copy(camera.quaternion)
-ScoreDisplay.position.copy(GhostCamera.clone().add(GhostLookAt.clone().multiplyScalar(2)))
-ScoreDisplay.position.y += 0.2
-ScoreDisplay.quaternion.copy(camera.quaternion)
-MultiDisplay.position.copy(GhostCamera.clone().add(GhostLookAt.clone().multiplyScalar(2)))
-MultiDisplay.position.y += 0.2
-MultiDisplay.quaternion.copy(camera.quaternion)
-
+function updateHUD() {
+    HUD.innerHTML = `
+        Lifes: ${LifesN} <br>
+        Score: ${Math.floor(Score)} <br>
+        Itens: ${ItensCount}/${TotalItens} <br>
+        Multiplier: x${Multi.toFixed(1)}
+    `
+}
+function ITCUPDT() {
+    if (!jogador) return
+    PlayerBox.setFromObject(jogador)
+    Colectables.forEach(itemData => {
+        if (itemData.collected) return
+        if (jogador.position.z - itemData.mesh.position.z > 10) {
+            itemData.mesh.position.z += 200
+            itemData.mesh.position.x = THREE.MathUtils.randFloat(-5, 5)
+        }
+        itemData.box.setFromObject(itemData.mesh)
+        itemData.mesh.rotation.y += 0.05
+        itemData.mesh.position.y = 2 + Math.sin(performance.now() * 0.005) * 0.5
+    })
+}
 function FCUPDT() {
     if (!jogador) return
     const Cupdt = jogador.position.clone().add(cameraoffset.clone().applyAxisAngle(
@@ -575,13 +579,13 @@ function animate() {
 
     WUPDT() // walls update
 
-    // Obstacles update
+    OBSTUPDT() // Obstacles update
 
     MVSTOUPDT(delta) // stone movement update
 
     OTHSTOUPDT(delta) // other stones movement update
 
-    // Difficulty update
+    updateDifficulty(delta) // Difficulty update
 
     // Score update
 
