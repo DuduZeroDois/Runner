@@ -469,6 +469,8 @@ function updateHUD() {
         Multiplier: x${Multi.toFixed(1)}
     `
 }
+
+// --- ADD Itens Count Update Function --- //
 function ITCUPDT() {
     if (!jogador) return
     PlayerBox.setFromObject(jogador)
@@ -481,8 +483,24 @@ function ITCUPDT() {
         itemData.box.setFromObject(itemData.mesh)
         itemData.mesh.rotation.y += 0.05
         itemData.mesh.position.y = 2 + Math.sin(performance.now() * 0.005) * 0.5
+        const ColliDist = jogador.position.distanceTo(itemData.mesh.position)
+        if (ColliDist < 2.4) {
+            const Flash = new THREE.PointLight(0xffff00, 2, 10)
+            Flash.position.copy(itemData.mesh.position)
+            scene.add(Flash)
+            setTimeout(() => scene.remove(Flash), 185)
+            itemData.collected = true
+            ItensCount++
+            const Dist = 100
+            itemData.mesh.position.z = jogador.position.z + Dist
+            itemData.mesh.position.x = THREE.MathUtils.randFloat(-5, 5)
+            itemData.mesh.position.y = 2
+            itemData.box.setFromObject(itemData.mesh)
+        }
     })
 }
+
+// --- ADD Camera Follow Player Update Function --- //
 function FCUPDT() {
     if (!jogador) return
     const Cupdt = jogador.position.clone().add(cameraoffset.clone().applyAxisAngle(
@@ -492,6 +510,7 @@ function FCUPDT() {
     camera.lookAt(Clookat)
 }
 
+// --- ADD Ground Update Function --- //
 function GUPDT() {
     if (!jogador) return
     groundsegment.forEach(segment => {
@@ -515,6 +534,7 @@ function OBSTUPDT() {
         }
 })}
 
+// --- ADD Player Movement Update Function --- //
 function JMUPDT() {
     if (!jogador || currentState !== GameState.RUNNING) return
     const moving = keys['w'] || keys['a'] || keys['s'] || keys['d']
@@ -562,14 +582,62 @@ function JMUPDT() {
     jogador.quaternion.slerp(targetQuaternion, 0.18)            
 }
 
+// --- ADD lava update function --- //
+function LAVUPDT(delta) {
+    if (!jogador) return
+    const GapZ = jogador.position.z - 20
+    if (GapZ > lava.position.z) lava.position.z += SpeedL * (1 + DificultyMultiplier)
+    lavaTexture.offset.y -= delta * 0.05
+    lava.material.emissiveIntensity = 1.2 + Math.sin(performance.now() * 0.005) * 0.5
+    lavaBox = new THREE.Box3().setFromObject(lava)
+    if (jogador) {
+        PlayerBox.setFromObject(jogador)
+        if (PlayerBox.intersectsBox(lavaBox)) {
+            Colli()
+        }
+    }
+}
+
+// --- Win Condition --- //
+function CKWNCD () {
+    if (ItensCount >= TotalItens) {
+        currentState = GameState.GAMEOVER    
+        alert("Parabens! Você conseguiu fazer sua obrigação!")
+        setTimeout(() => {
+            window.location.reload()
+        }, 500)
+}}
+
 // --- ADD Score Update Function --- //
+function SCRUPDT(delta) {
+    if (currentState !== GameState.RUNNING) return
+    if (!jogador) return
+    const ScoreGain = runornot ? 2 : 1
+    Score += delta * 15 * Multi * ScoreGain
+    // Multi Mudanças
+    if (!runornot){
+        Multi -= delta * 0.15
+        Multi = Math.max(1, Multi)
+    }else {
+        Multi += delta * 0.08
+        Multi = Math.min(5, Multi)
+    }
+    stones.forEach(stoneData => {
+        if (!stoneData || !stoneData.mesh) return
+        const DistP = jogador.position.distanceTo(stoneData.mesh.position)
+        if (DistP < FarScore) {
+            Score += 3 * delta
+            Multi += 0.08 * delta
+        }
+})}
+
 
 function animate() {
     requestAnimationFrame(animate)
     const delta = clock.getDelta()
     if (mixer) mixer.update(delta)
 
-    // HUD update
+    updateHUD() // HUD update
 
     JMUPDT() // player movement update
 
@@ -587,7 +655,13 @@ function animate() {
 
     updateDifficulty(delta) // Difficulty update
 
-    // Score update
+    ITCUPDT() // itens count update
+
+    LAVUPDT(delta) // lava update
+
+    CKWNCD() // win condition check
+
+    SCRUPDT(delta) // Score update
 
     if (jogador) {
         PlayerBox.setFromObject(jogador)
